@@ -830,14 +830,13 @@ class BaseActivation(Brick):
         The number of times the output is smaller than the input.
 
     """
-    pass
+    shrinks_times = 1
 
 
 def _activation_factory(name, activation):
     """Class factory for Bricks which perform simple Theano calls."""
     class Activation(BaseActivation):
         """Element-wise application of {0} function."""
-        shrinks_times = 1
 
         @application(inputs=['inp'], outputs=['output'])
         def apply(self, inp):
