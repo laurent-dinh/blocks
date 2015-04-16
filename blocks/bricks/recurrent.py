@@ -14,6 +14,7 @@ from blocks.initialization import NdarrayInitialization
 from blocks.roles import add_role, WEIGHT
 from blocks.utils import (pack, shared_floatx_nans, dict_union, dict_subset,
                           is_shared_variable)
+from blocks.select import Selector
 
 logger = logging.getLogger()
 
@@ -109,6 +110,7 @@ def recurrent(*args, **kwargs):
             # Extract arguments related to iteration and immediately relay the
             # call to the wrapped function if `iterate=False`
             iterate = kwargs.pop('iterate', True)
+            scan_strict = kwargs.pop('scan_strict', False)
             if not iterate:
                 return application_function(brick, *args, **kwargs)
             reverse = kwargs.pop('reverse', False)
@@ -182,13 +184,21 @@ def recurrent(*args, **kwargs):
                 states_given[name] = tensor.unbroadcast(state,
                                                         *range(state.ndim))
 
+            shared_vars = []
+            if scan_strict:
+                shared_vars = list(Selector(brick).get_params().values())
+
             def scan_function(*args):
                 args = list(args)
                 arg_names = (list(sequences_given) +
                              [output for output in application.outputs
                               if output in application.states] +
                              list(contexts_given))
-                kwargs = dict(equizip(arg_names, args))
+                if scan_strict:
+                    new_args = args[:-len(shared_vars)]
+                else:
+                    new_args = args
+                kwargs = dict(equizip(arg_names, new_args))
                 kwargs.update(rest_kwargs)
                 outputs = application(iterate=False, **kwargs)
                 # We want to save the computation graph returned by the
@@ -204,9 +214,10 @@ def recurrent(*args, **kwargs):
             result, updates = theano.scan(
                 scan_function, sequences=list(sequences_given.values()),
                 outputs_info=outputs_info,
-                non_sequences=list(contexts_given.values()),
+                non_sequences=list(contexts_given.values()) + shared_vars,
                 n_steps=n_steps,
-                go_backwards=reverse)
+                go_backwards=reverse,
+                strict=scan_strict)
             result = pack(result)
             if return_initial_states:
                 # Undo Subtensor
