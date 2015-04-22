@@ -160,6 +160,9 @@ class Orthogonal(NdarrayInitialization):
 
     """
     def generate(self, rng, shape):
+        if len(shape) < 2:
+            return Constant(1.).generate(rng, shape)
+
         if len(shape) != 2:
             raise ValueError
 
